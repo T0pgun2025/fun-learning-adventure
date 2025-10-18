@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Fun Learning Adventure</title>
+<style>
+body { font-family: "Comic Sans MS", sans-serif; text-align: center; background: #fdf6e3; margin: 0; padding: 0; }
+h1 { color: #ff6f61; font-size: 48px; margin: 10px 0; text-shadow: 2px 2px #ffd700; }
+#question { font-size: 28px; margin: 20px 0; color: #2a9d8f; }
+.answer-btn {
+  font-size: 22px; padding: 12px 25px; margin: 10px; cursor: pointer;
+  border-radius: 15px; border: none; background-color: #fffef5;
+  color: #333; box-shadow: 0 3px 5px rgba(0,0,0,0.2);
+  transition: transform 0.2s, background-color 0.3s;
+}
+.answer-btn:hover { background-color: #ffb347; transform: scale(1.05); color: #fff; }
+#score, #level, #timer, #best-score { font-size: 24px; margin: 10px; }
+#restart-btn, #change-mode-btn, #exit-btn {
+  margin-top: 20px; font-size: 20px; padding: 10px 20px; border-radius: 10px; border: none;
+  background-color: #6a82fb; color: white; cursor: pointer;
+}
+#restart-btn:hover, #change-mode-btn:hover, #exit-btn:hover { background-color: #fc5c7d; }
+#feedback { font-size: 26px; margin-top: 20px; height: 40px; }
+.star { font-size: 30px; color: gold; animation: pop 0.5s; }
+@keyframes pop { 0% { transform: scale(0); } 50% { transform: scale(1.5); } 100% { transform: scale(1); } }
+#summary { display:none; font-size: 26px; margin-top: 20px; }
+#progress-container { width: 80%; margin: 0 auto; background: #ddd; border-radius: 10px; height: 25px; }
+#progress-bar { width: 0%; height: 100%; background: #2a9d8f; border-radius: 10px; transition: width 0.5s ease-in-out; }
+.confetti-piece { position: absolute; width: 10px; height: 10px; opacity: 0.8; animation: fall 2s linear forwards; }
+@keyframes fall { 0% { transform: translateY(0) rotate(0deg); } 100% { transform: translateY(300px) rotate(360deg); opacity:0; } }
+
+#mode-select { display: none; padding: 30px 20px; }
+.mode-btn {
+  display: inline-block; font-size: 24px; padding: 18px 30px; margin: 12px; border-radius: 18px;
+  border: none; cursor: pointer; background: #2a9d8f; color: #fff;
+  box-shadow: 0 6px 0 #1f796f; transition: transform .15s;
+}
+.mode-btn:hover { transform: translateY(-2px); }
+
+#game-ui.hidden { display: none; }
+.color-pill { display: inline-block; padding: 2px 10px; border-radius: 999px; background: #222; color: #fff; }
+
+#thankyou-screen {
+  display: none; padding: 40px 20px; background: linear-gradient(160deg, #fff7d6, #ffe9f0);
+  min-height: 40vh; margin: 20px auto; width: 80%; border-radius: 18px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+}
+#thankyou-title { font-size: 36px; color: #ff8a65; text-shadow: 1px 1px #ffd180; margin-bottom: 10px; }
+#thankyou-msg { font-size: 22px; color: #2a9d8f; }
+</style>
+</head>
+<body>
+
+<h1>Fun Learning Adventure!</h1>
+
+<div id="mode-select">
+  <h2 style="color:#2a9d8f; margin: 10px 0;">Choose a Mode</h2>
+  <div style="font-size:20px; margin-bottom:12px;">Welcome, <span id="ms-player-name">Player</span>!</div>
+  <button class="mode-btn" onclick="startGame('adventure')">Learning Adventure</button>
+  <button class="mode-btn" onclick="startGame('color')">Color Match</button>
+  <button class="mode-btn" onclick="startGame('word')">Word Match</button>
+</div>
+
+<div id="thankyou-screen">
+  <div id="thankyou-title">🎉 Great job!</div>
+  <div id="thankyou-msg">Thanks for playing, <span id="ty-name">Player</span>! See you next time!</div>
+</div>
+
+<div id="game-ui" class="hidden">
+  <div id="player-name"></div>
+  <div id="level">Level: 1</div>
+  <div id="score">Score: 0</div>
+  <div id="best-score">Best Score: 0</div>
+  <div id="progress-container"><div id="progress-bar"></div></div>
+  <div id="timer">Time: 15</div>
+  <div id="question"></div>
+  <div id="answers"></div>
+  <div id="feedback"></div>
+  <div id="summary"></div>
+  <div style="margin-top:10px;">
+    <button id="restart-btn" onclick="restartGame()">Restart Game</button>
+    <button id="change-mode-btn" onclick="showModeSelect()">Change Mode</button>
+    <button id="exit-btn" onclick="exitGame()">Exit Game</button>
+  </div>
+</div>
+
+<audio id="correct-sound" src="https://www.soundjay.com/buttons/sounds/button-3.mp3"></audio>
+<audio id="wrong-sound" src="https://www.soundjay.com/buttons/sounds/button-10.mp3"></audio>
+
+<script>
+let score=0, level=1, timer, timeLeft=15, playerName="", currentQuestion=null;
+let mode = 'adventure';
+const bestScores = { adventure:0, color:0, word:0 };
+const COLORS=[{en:"blue",es:"azul",hex:"#1e90ff"},{en:"yellow",es:"amarillo",hex:"#ffd000"},{en:"green",es:"verde",hex:"#2e7d32"},{en:"red",es:"rojo",hex:"#e53935"},{en:"orange",es:"naranja",hex:"#fb8c00"},{en:"white",es:"blanco",hex:"#ffffff"}];
+const WORDS=[{en:"squirrel",es:"ardilla",emoji:"🐿️"},{en:"acorn",es:"bellota",emoji:"🌰"},{en:"leaf",es:"hoja",emoji:"🍃"},{en:"tree",es:"árbol",emoji:"🌳"},{en:"flower",es:"flor",emoji:"🌸"},{en:"bird",es:"pájaro",emoji:"🐦"},{en:"sun",es:"sol",emoji:"☀️"},{en:"moon",es:"luna",emoji:"🌙"},{en:"star",es:"estrella",emoji:"⭐"},{en:"cloud",es:"nube",emoji:"☁️"},{en:"water",es:"agua",emoji:"💧"},{en:"rock",es:"roca",emoji:"🪨"},{en:"grass",es:"césped",emoji:"🌿"},{en:"butterfly",es:"mariposa",emoji:"🦋"},{en:"worm",es:"gusano",emoji:"🪱"}];
+
+let voices=[], spanishVoice=null, englishVoice=null;
+speechSynthesis.onvoiceschanged = () => { loadVoices(); };
+function loadVoices(){
+  voices = speechSynthesis.getVoices();
+  spanishVoice = voices.find(v=>v.lang.includes('es-MX')) || voices.find(v=>v.lang.includes('es-ES')) || null;
+  englishVoice = voices.find(v=>v.lang.includes('en-US')) || voices.find(v=>v.lang.includes('en')) || null;
+}
+
+function speak(text, lang="en", slow=false){
+  if(!text) return;
+  const u = new SpeechSynthesisUtterance(text);
+  if(lang.startsWith('es')){ u.voice = spanishVoice; u.lang = spanishVoice ? spanishVoice.lang : 'es-ES'; u.rate = spanishVoice && spanishVoice.lang.includes('MX') ? 0.8 : 1.0; }
+  else { u.voice = englishVoice; u.lang = 'en-US'; u.rate = 1.0; }
+  speechSynthesis.speak(u);
+}
+
+window.onload = function(){
+  playerName = prompt("Enter your name:") || "Player";
+  document.getElementById("player-name").innerText = `Welcome, ${playerName}!`;
+  document.getElementById("ms-player-name").innerText = playerName;
+  document.getElementById("ty-name").innerText = playerName;
+  loadVoices();
+  showModeSelect();
+};
+
+function bestKey(m){return playerName+"-best-"+m;}
+function loadBestScores(){['adventure','color','word'].forEach(m=>bestScores[m]=Number(localStorage.getItem(bestKey(m)))||0);}
+function saveBestScore(m){localStorage.setItem(bestKey(m),String(bestScores[m]));}
+function showBestForCurrentMode(){document.getElementById("best-score").innerText="Best Score: "+(bestScores[mode]||0);}
+
+const generalQuestions=[{question:"Which one is a fruit?",answers:["Carrot","Apple","Potato"],correct:1},{question:"What color is the sky?",answers:["Blue","Green","Red"],correct:0}];
+let addFactsBeginner=[], subFactsBeginner=[];for(let a=0;a<=10;a++){for(let b=0;b<=10;b++){if(a+b<=10)addFactsBeginner.push({a,b});if(a-b>=0)subFactsBeginner.push({a,b});}}
+
+function getRandomInt(min,max){return Math.floor(Math.random()*(max-min+1))+min;}
+function pick(a){return a[getRandomInt(0,a.length-1)];}
+function shuffled(a){const b=a.slice();for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];}return b;}
+function capitalize(s){return s.charAt(0).toUpperCase()+s.slice(1);}
+
+function generateColorQuestion(){
+  const dir=Math.random()<0.5?"en2es":"es2en";const it=pick(COLORS);const pool=shuffled(COLORS).filter(x=>x!==it).slice(0,2);
+  if(dir==="en2es"){const correct=it.es;const opts=shuffled([it,...pool]).map(c=>c.es);
+    const engStyled=(it.en==="white")?`<span class="color-pill">White</span>`:`<span style="color:${it.hex};font-weight:bold">${it.en}</span>`;
+    return{question:`What is ${engStyled} in Spanish?`,answers:opts,correct:opts.indexOf(correct),lang:"en",speakText:`What is ${it.en} in Spanish?`,speakAnswer:correct};}
+  else{const correct=it.en;const opts=shuffled([it,...pool]).map(c=>c.en);
+    return{question:`¿Qué color es ${it.es}?`,answers:opts,correct:opts.indexOf(correct),lang:"es",speakText:`¿Qué color es ${it.es}?`,speakAnswer:it.es};}
+}
+
+function generateWordQuestion() {
+  const dir = Math.random() < 0.5 ? "en2es" : "es2en";
+  const it = pick(WORDS);
+  const pool = shuffled(WORDS).filter(x => x !== it).slice(0, 2);
+
+  if (dir === "en2es") {
+    const correct = `${it.es} ${it.emoji}`;
+    const opts = shuffled([it, ...pool]).map(w => `${w.es} ${w.emoji}`);
+    return {
+      question: `What is "${capitalize(it.en)} ${it.emoji}" in Spanish?`,
+      answers: opts,
+      correct: opts.indexOf(correct),
+      lang: "en",
+      speakText: `What is ${it.en} in Spanish?`,   // speaks English question
+      speakAnswer: it.es                           // speaks Spanish word after correct
+    };
+  } else {
+    const correct = `${capitalize(it.en)} ${it.emoji}`;
+    const opts = shuffled([it, ...pool]).map(w => `${capitalize(w.en)} ${w.emoji}`);
+    return {
+      question: `¿Qué palabra es "${capitalize(it.es)} ${it.emoji}"?`,
+      answers: opts,
+      correct: opts.indexOf(correct),
+      lang: "es",
+      speakText: `¿Qué palabra es ${it.es}?`,      // speaks Spanish question
+      speakAnswer: it.es                           // speaks Spanish word after correct
+    };
+  }
+}
+
+function generateMathQuestion(){
+  // pick op and fact
+  const op = Math.random() < 0.5 ? "add" : "sub";
+  const f  = op === "add" ? pick(addFactsBeginner) : pick(subFactsBeginner);
+
+  // build question text + true answer
+  let questionText, correct, speakQ;
+  if (op === "add") {
+    questionText = `${f.a}+${f.b}`;
+    correct = f.a + f.b;
+    speakQ = `What is ${f.a} plus ${f.b}?`;
+  } else {
+    questionText = `${f.a}-${f.b}`;
+    correct = f.a - f.b;
+    speakQ = `What is ${f.a} minus ${f.b}?`;
+  }
+
+  // make two unique distractors near the correct answer
+  const distractors = new Set();
+  while (distractors.size < 2) {
+    const d = getRandomInt(Math.max(0, correct - 3), correct + 3);
+    if (d !== correct) distractors.add(d);
+  }
+
+  // shuffle all options and then locate the correct index
+  const optionsNums = [correct, ...Array.from(distractors)];
+  const answers = shuffled(optionsNums).map(String);
+  const correctIndex = answers.indexOf(String(correct));
+
+  return {
+    question: `What is ${questionText}?`,
+    answers,
+    correct: correctIndex,
+    lang: "en",
+    speakText: speakQ
+  };
+}
+function getRandomQuestion(){
+  if (mode === "color") return generateColorQuestion();
+  if (mode === "word")  return generateWordQuestion();
+
+  // Learning Adventure:
+  const mathChance = 0.7;
+  if (Math.random() < mathChance) {
+    return generateMathQuestion();
+  } else {
+    const g = pick(generalQuestions); // {question, answers, correct}
+    // Add voice fields so the question is spoken
+    return {
+      ...g,
+      lang: "en",
+      speakText: g.question
+    };
+  }
+}
+
+function showQuestion(){
+  currentQuestion=getRandomQuestion();
+  document.getElementById("question").innerHTML=currentQuestion.question;
+  const ad=document.getElementById("answers");ad.innerHTML="";document.getElementById("feedback").innerHTML="";
+  currentQuestion.answers.forEach((ans,i)=>{const b=document.createElement("button");b.innerText=ans;b.className="answer-btn";b.onclick=()=>checkAnswer(i);ad.appendChild(b);});
+  resetTimer();speak(currentQuestion.speakText,currentQuestion.lang);
+}
+
+function resetTimer(){timeLeft=15;document.getElementById("timer").innerText="Time: "+timeLeft;clearInterval(timer);timer=setInterval(()=>{timeLeft--;document.getElementById("timer").innerText="Time: "+timeLeft;if(timeLeft<=0){clearInterval(timer);document.getElementById("feedback").innerText="⏰ Time's up!";resetTimer();}},1000);}
+function updateDisplay(){document.getElementById("score").innerText="Score: "+score;document.getElementById("level").innerText="Level: "+level;showBestForCurrentMode();document.getElementById("progress-bar").style.width=(score%5)/5*100+"%";}
+function showConfetti(){for(let i=0;i<30;i++){const c=document.createElement("div");c.className="confetti-piece";c.style.backgroundColor=`hsl(${Math.random()*360},70%,60%)`;c.style.left=Math.random()*window.innerWidth+"px";c.style.top="-20px";document.body.appendChild(c);setTimeout(()=>c.remove(),2000);}}
+function levelSummary(){clearInterval(timer);showConfetti();document.getElementById("summary").style.display="block";document.getElementById("summary").innerHTML=`🎉 Level ${level-1} complete! Stars earned: ${"⭐".repeat(Math.min(5,score))}`;setTimeout(()=>{document.getElementById("summary").style.display="none";showQuestion();},2000);}
+function checkAnswer(i){clearInterval(timer);if(i===currentQuestion.correct){score++;document.getElementById("correct-sound").play();if(score>bestScores[mode]){bestScores[mode]=score;saveBestScore(mode);}updateDisplay();document.getElementById("feedback").innerHTML="<span class='star'>⭐</span>";speak(currentQuestion.speakAnswer,"es");if(score%5===0){level++;levelSummary();}else setTimeout(showQuestion,800);}else{document.getElementById("feedback").innerText="❌ Try Again!";document.getElementById("wrong-sound").play();resetTimer();}}
+function restartGame(){score=0;level=1;updateDisplay();showQuestion();}
+function startGame(m){mode=m;document.getElementById("mode-select").style.display="none";document.getElementById("thankyou-screen").style.display="none";document.getElementById("game-ui").classList.remove("hidden");updateDisplay();restartGame();}
+function showModeSelect(){clearInterval(timer);document.getElementById("game-ui").classList.add("hidden");document.getElementById("thankyou-screen").style.display="none";document.getElementById("mode-select").style.display="block";}
+function exitGame(){clearInterval(timer);document.getElementById("game-ui").classList.add("hidden");document.getElementById("mode-select").style.display="none";document.getElementById("thankyou-screen").style.display="block";showConfetti();setTimeout(()=>{document.getElementById("thankyou-screen").style.display="none";document.getElementById("mode-select").style.display="block";},3000);}
+</script>
+</body>
+</html>
